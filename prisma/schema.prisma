@@ -1,0 +1,143 @@
+// Prisma Schema for Voting Beyond Borders
+// Demonstrating clean, production-grade models for PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum ElectionStatus {
+  UPCOMING
+  ACTIVE
+  PAUSED
+  CONCLUDED
+}
+
+enum BallotStatus {
+  ENCRYPTED
+  RECORDED
+  TALLY_VERIFIED
+}
+
+enum AuditCategory {
+  BALLOT
+  AUTHENTICATION
+  SECURITY
+  INTEGRITY
+  SYSTEM
+}
+
+enum AuditStatus {
+  VERIFIED
+  RECORDED
+  ENCRYPTED
+  ALERT
+}
+
+model DemoVoter {
+  id              String    @id @default(uuid())
+  maskedVoterId   String    @unique
+  passportHash    String
+  country         String
+  consulateRegion String
+  constituency    String
+  isEligible      Boolean   @default(true)
+  hasVoted        Boolean   @default(false)
+  blindedToken    String?   @unique
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("demo_voters")
+}
+
+model Election {
+  id           String         @id @default(uuid())
+  title        String
+  category     String
+  constituency String
+  description  String
+  startTime    DateTime
+  endTime      DateTime
+  status       ElectionStatus @default(ACTIVE)
+  candidates   Candidate[]
+  ballots      EncryptedBallot[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@map("elections")
+}
+
+model Candidate {
+  id               String   @id @default(uuid())
+  electionId       String
+  name             String
+  partyName        String
+  partyCode        String
+  symbolEmoji      String
+  manifestoSummary String
+  colorHex         String
+  election         Election @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+
+  @@map("candidates")
+}
+
+model EncryptedBallot {
+  id                 String       @id @default(uuid())
+  electionId         String
+  encryptedVoteBlob  String       @db.Text
+  ivHex              String
+  sha256Hash         String       @unique
+  receiptCode        String       @unique
+  blindedVoterToken  String       @unique
+  status             BallotStatus @default(ENCRYPTED)
+  blockHeight        Int          @default(4892)
+  batchIndex         Int          @default(14)
+  election           Election     @relation(fields: [electionId], references: [id], onDelete: Cascade)
+  receipt            Receipt?
+  createdAt          DateTime     @default(now())
+
+  @@map("encrypted_ballots")
+}
+
+model Receipt {
+  id             String          @id @default(uuid())
+  receiptCode    String          @unique
+  transactionId  String          @unique
+  ballotId       String          @unique
+  merkleRootHash String
+  batchIndex     Int
+  blockHeight    Int
+  encryptedBallot EncryptedBallot @relation(fields: [ballotId], references: [id], onDelete: Cascade)
+  createdAt      DateTime        @default(now())
+
+  @@map("receipts")
+}
+
+model AuditEvent {
+  id        String        @id @default(uuid())
+  event     String
+  category  AuditCategory
+  hash      String
+  status    AuditStatus   @default(RECORDED)
+  details   String        @db.Text
+  createdAt DateTime      @default(now())
+
+  @@map("audit_events")
+}
+
+model SecurityEvent {
+  id         String   @id @default(uuid())
+  type       String
+  severity   String
+  source     String
+  mitigation String
+  status     String
+  createdAt  DateTime @default(now())
+
+  @@map("security_events")
+}
